@@ -1,214 +1,332 @@
--- ================================================================
---  HALUME PERFUME E-COMMERCE
---  SQL Query Documentation — Berdasarkan Mock Data
---  Proyek WRPL · Universitas Gadjah Mada
--- ================================================================
--- Catatan parameter:
---   :param  = nilai dikirim dari backend (Node.js / NestJS)
--- ================================================================
+-- ==========================================================
+-- HALUME E-COMMERCE CORE QUERY LIBRARY
+-- ==========================================================
+-- Digunakan untuk fitur utama e-commerce parfum
+-- ==========================================================
 
+-- ==========================================================
+-- 1. USER MANAGEMENT
+-- ==========================================================
 
+-- Register user baru
+INSERT INTO users (email, password_hash, full_name)
+VALUES ('[user@email.com](mailto:user@email.com)', 'hashed_password', 'Nama User');
 
--- ================================================================
--- 1. SEARCH & DISCOVERY
---    Fitur pencarian parfum oleh user
--- ================================================================
+-- Login (mencari user berdasarkan email)
+SELECT *
+FROM users
+WHERE email = '[user@email.com](mailto:user@email.com)';
 
--- 1.1 Pencarian Parfum berdasarkan Nama
---     Contoh: user mencari parfum dengan kata "elixir"
---     Akan menemukan: "Halume Marco Élixir"
+-- Mendapatkan profil user
+SELECT id, email, full_name, role, created_at
+FROM users
+WHERE id = 1;
 
-SELECT id, name, price, stock
-FROM products
-WHERE name LIKE CONCAT('%', :keyword, '%');
+-- ==========================================================
+-- 2. ADDRESS MANAGEMENT
+-- ==========================================================
 
+-- Menambahkan alamat baru
+INSERT INTO addresses
+(user_id, recipient_name, phone_number, address_line, city, postal_code, is_primary)
+VALUES
+(1,'Hammam Yazid','08123456789','Jl. Kaliurang KM 10','Yogyakarta','55281',1);
 
--- 1.2 Pencarian dengan Filter Kategori & Harga
---     Contoh: cari parfum kategori Limited Edition (id=1)
---     dengan harga antara 400rb – 700rb
+-- Melihat semua alamat user
+SELECT *
+FROM addresses
+WHERE user_id = 1;
 
+-- Update alamat
+UPDATE addresses
+SET address_line = 'Jl. Kaliurang KM 11'
+WHERE id = 2;
+
+-- Menghapus alamat
+DELETE FROM addresses
+WHERE id = 2;
+
+-- ==========================================================
+-- 3. PRODUCT & CATEGORY
+-- ==========================================================
+
+-- Melihat semua kategori parfum
+SELECT *
+FROM categories;
+
+-- Menambahkan kategori
+INSERT INTO categories (name, slug)
+VALUES ('Floral','floral');
+
+-- Menambahkan produk parfum
+INSERT INTO products
+(category_id, name, description, price, stock, sku, image_url)
+VALUES
+(1,'Rose Elegance','Parfum floral dengan aroma mawar',350000,50,'PRF001','rose.jpg');
+
+-- Detail produk
 SELECT
-    p.id,
-    p.name,
-    p.price,
-    c.name AS category
+p.id,
+p.name,
+p.description,
+p.price,
+p.stock,
+c.name AS category
 FROM products p
 JOIN categories c ON p.category_id = c.id
-WHERE p.category_id = :category_id
-AND p.price BETWEEN :min_price AND :max_price
-ORDER BY p.price ASC;
+WHERE p.id = 1;
 
+-- ==========================================================
+-- 4. SEARCH & DISCOVERY
+-- ==========================================================
 
--- 1.3 Autocomplete / Suggest Nama Parfum
---     Digunakan untuk live search saat user mengetik
---     Contoh: user mengetik "Halume D"
+-- Melihat semua produk aktif
+SELECT
+p.id,
+p.name,
+p.price,
+p.stock,
+p.image_url,
+c.name AS category
+FROM products p
+JOIN categories c ON p.category_id = c.id
+WHERE p.is_active = 1;
 
-SELECT id, name
+-- Search parfum berdasarkan nama
+SELECT *
 FROM products
-WHERE name LIKE CONCAT(:keyword, '%')
-LIMIT 5;
+WHERE name LIKE '%rose%'
+AND is_active = 1;
 
+-- Filter produk berdasarkan kategori
+SELECT p.*
+FROM products p
+JOIN categories c ON p.category_id = c.id
+WHERE c.slug = 'floral';
 
+-- Filter berdasarkan harga
+SELECT *
+FROM products
+WHERE price BETWEEN 100000 AND 500000
+AND is_active = 1;
 
--- ================================================================
--- 2. CART MANAGEMENT
---    Pengelolaan keranjang belanja
--- ================================================================
+-- Sorting produk berdasarkan harga termurah
+SELECT *
+FROM products
+WHERE is_active = 1
+ORDER BY price ASC;
 
--- 2.1 Tambah Produk ke Keranjang
---     Contoh: user menambahkan parfum id=1 sebanyak 2 item
+-- Produk stok hampir habis
+SELECT *
+FROM products
+WHERE stock < 5;
 
+-- ==========================================================
+-- 5. CART MANAGEMENT
+-- ==========================================================
+
+-- Membuat cart untuk user
+INSERT INTO carts (user_id)
+VALUES (1);
+
+-- Menambahkan produk ke cart
 INSERT INTO cart_items (cart_id, product_id, quantity)
-VALUES (:cart_id, :product_id, :quantity);
+VALUES (1,5,2);
 
-
--- 2.2 Melihat Isi Keranjang
-
-SELECT
-    ci.id,
-    p.name,
-    p.price,
-    ci.quantity,
-    (p.price * ci.quantity) AS subtotal
-FROM cart_items ci
-JOIN products p ON ci.product_id = p.id
-WHERE ci.cart_id = :cart_id;
-
-
--- 2.3 Update Jumlah Produk di Keranjang
-
+-- Update quantity produk di cart
 UPDATE cart_items
-SET quantity = :quantity
-WHERE id = :cart_item_id;
+SET quantity = 3
+WHERE cart_id = 1
+AND product_id = 5;
 
-
--- 2.4 Hapus Produk dari Keranjang
-
+-- Menghapus produk dari cart
 DELETE FROM cart_items
-WHERE id = :cart_item_id;
+WHERE cart_id = 1
+AND product_id = 5;
 
-
-
--- ================================================================
--- 3. ORDER PROCESS
---    Proses checkout pesanan
--- ================================================================
-
--- 3.1 Buat Order Baru
---     Contoh alur: user_id=4 menekan tombol "Pesan Sekarang"
-
--- Step 1: Hitung total harga dari keranjang
-
-SELECT SUM(p.price * ci.quantity) AS total_amount
+-- Melihat isi cart user
+SELECT
+p.id,
+p.name,
+p.price,
+ci.quantity,
+(p.price * ci.quantity) AS subtotal
 FROM cart_items ci
-JOIN carts c ON ci.cart_id = c.id
 JOIN products p ON ci.product_id = p.id
-WHERE c.user_id = :user_id;
-
-
--- Step 2: Insert order baru
-
-INSERT INTO orders (user_id, total_amount, status, created_at)
-VALUES (:user_id, :total_amount, 'pending', NOW());
-
-
--- Step 3: Ambil ID order yang baru dibuat
-
-SELECT LAST_INSERT_ID() AS new_order_id;
-
-
-
--- ================================================================
--- 3.2 Pindahkan Cart Items → Order Items + Kurangi Stok
--- ================================================================
-
--- Salin item dari cart ke order_items
-
-INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
-SELECT
-    :new_order_id,
-    ci.product_id,
-    ci.quantity,
-    p.price
-FROM cart_items ci
 JOIN carts c ON ci.cart_id = c.id
+WHERE c.user_id = 1;
+
+-- Total harga cart
+SELECT
+SUM(p.price * ci.quantity) AS total_price
+FROM cart_items ci
 JOIN products p ON ci.product_id = p.id
-WHERE c.user_id = :user_id;
-
-
--- Kurangi stok produk sesuai jumlah yang dipesan
-
-UPDATE products p
-JOIN order_items oi ON p.id = oi.product_id
-SET p.stock = p.stock - oi.quantity
-WHERE oi.order_id = :new_order_id;
-
-
--- Kosongkan keranjang setelah checkout berhasil
-
-DELETE ci
-FROM cart_items ci
 JOIN carts c ON ci.cart_id = c.id
-WHERE c.user_id = :user_id;
+WHERE c.user_id = 1;
 
+-- ==========================================================
+-- 6. CHECKOUT PROCESS
+-- ==========================================================
 
+-- Membuat order dari cart
+INSERT INTO orders (user_id, total_amount, status)
+VALUES (1, 750000, 'awaiting_payment');
 
--- ================================================================
--- 4. SHIPPING ADDRESS
---    Pengelolaan alamat pengiriman
--- ================================================================
+-- Memasukkan item order
+INSERT INTO order_items
+(order_id, product_id, quantity, price_at_purchase)
+VALUES
+(10,3,1,250000),
+(10,7,2,250000);
 
--- 4.1 Ambil alamat pengiriman user
---     Contoh: user_id=6 memiliki beberapa alamat
+-- Mengurangi stok setelah checkout
+UPDATE products
+SET stock = stock - 1
+WHERE id = 3;
 
-SELECT
-    id,
-    user_id,
-    address,
-    city,
-    postal_code,
-    is_primary
-FROM addresses
-WHERE user_id = :user_id
-ORDER BY is_primary DESC;
+-- ==========================================================
+-- 7. ORDER MANAGEMENT
+-- ==========================================================
 
-
--- 4.2 Set alamat utama
-
-UPDATE addresses
-SET is_primary = 0
-WHERE user_id = :user_id;
-
-UPDATE addresses
-SET is_primary = 1
-WHERE id = :address_id;
-
-
-
--- ================================================================
--- 5. ORDER HISTORY
---    Riwayat pesanan user
--- ================================================================
-
--- 5.1 Melihat semua order milik user
-
-SELECT
-    id,
-    total_amount,
-    status,
-    created_at
+-- Melihat semua order user
+SELECT *
 FROM orders
-WHERE user_id = :user_id
+WHERE user_id = 1
 ORDER BY created_at DESC;
 
-
--- 5.2 Detail produk dalam sebuah order
-
+-- Detail order
 SELECT
-    oi.product_id,
-    p.name,
-    oi.quantity,
-    oi.price_at_purchase
+p.name,
+oi.quantity,
+oi.price_at_purchase,
+(oi.quantity * oi.price_at_purchase) AS subtotal
 FROM order_items oi
 JOIN products p ON oi.product_id = p.id
-WHERE oi.order_id = :order_id;
+WHERE oi.order_id = 10;
+
+-- Update status order
+UPDATE orders
+SET status = 'processing'
+WHERE id = 10;
+
+-- ==========================================================
+-- 8. PAYMENT PROCESSING
+-- ==========================================================
+
+-- Membuat data pembayaran
+INSERT INTO payments
+(order_id, payment_method, payment_status)
+VALUES
+(10,'midtrans','pending');
+
+-- Update pembayaran sukses
+UPDATE payments
+SET payment_status = 'success',
+transaction_time = NOW()
+WHERE order_id = 10;
+
+-- Update order setelah pembayaran sukses
+UPDATE orders
+SET status = 'processing'
+WHERE id = 10;
+
+-- ==========================================================
+-- 9. SHIPPING MANAGEMENT
+-- ==========================================================
+
+-- Membuat data pengiriman
+INSERT INTO shipments
+(order_id, courier_name, tracking_number, shipped_at)
+VALUES
+(10,'JNE','JNE123456789',NOW());
+
+-- Update status pengiriman
+UPDATE shipments
+SET status = 'terkirim'
+WHERE order_id = 10;
+
+-- Melihat status pengiriman
+SELECT
+o.id AS order_id,
+s.courier_name,
+s.tracking_number,
+s.status
+FROM shipments s
+JOIN orders o ON s.order_id = o.id
+WHERE o.user_id = 1;
+
+-- ==========================================================
+-- 10. ADMIN PRODUCT MANAGEMENT
+-- ==========================================================
+
+-- Update stok produk
+UPDATE products
+SET stock = 100
+WHERE id = 5;
+
+-- Menonaktifkan produk
+UPDATE products
+SET is_active = 0
+WHERE id = 5;
+
+-- Menghapus produk
+DELETE FROM products
+WHERE id = 5;
+
+-- ==========================================================
+-- 11. ANALYTICS & REPORTING
+-- ==========================================================
+
+-- Produk paling laris
+SELECT
+p.name,
+SUM(oi.quantity) AS total_sold
+FROM order_items oi
+JOIN products p ON oi.product_id = p.id
+GROUP BY p.id
+ORDER BY total_sold DESC
+LIMIT 10;
+
+-- Total revenue toko
+SELECT
+SUM(total_amount) AS total_revenue
+FROM orders
+WHERE status = 'completed';
+
+-- Total order
+SELECT COUNT(*) AS total_orders
+FROM orders;
+
+-- Revenue per hari
+SELECT
+DATE(created_at) AS order_date,
+SUM(total_amount) AS daily_revenue
+FROM orders
+GROUP BY DATE(created_at);
+
+-- ==========================================================
+-- 12. RECOMMENDATION
+-- ==========================================================
+
+-- Related product berdasarkan kategori
+SELECT *
+FROM products
+WHERE category_id =
+(
+SELECT category_id
+FROM products
+WHERE id = 1
+)
+AND id != 1
+LIMIT 5;
+
+-- Produk paling populer
+SELECT
+p.id,
+p.name,
+SUM(oi.quantity) AS total_sold
+FROM products p
+JOIN order_items oi ON p.id = oi.product_id
+GROUP BY p.id
+ORDER BY total_sold DESC
+LIMIT 5;
